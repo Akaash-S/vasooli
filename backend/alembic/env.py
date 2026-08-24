@@ -1,11 +1,16 @@
 import os
+import sys
 from logging.config import fileConfig
+from pathlib import Path
 
 from dotenv import load_dotenv
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
 
 from alembic import context
+
+# Ensure 'backend/' is on sys.path so 'app.models' is importable from here
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Load environment variables from .env before anything else needs them
 load_dotenv()
@@ -24,11 +29,9 @@ if database_url:
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
-# from myapp import mymodel
-# target_metadata = mymodel.Base.metadata
-target_metadata = None
+# Import models so autogenerate can detect all six tables
+from app.models import Base  # noqa: E402
+target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
 # can be acquired:

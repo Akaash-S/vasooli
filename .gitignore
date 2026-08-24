@@ -7,3 +7,5 @@ node_modules/
 .venv/
 *.log
 backend/data/raw/
+backend/data/injected_batch.csv
+backend/data/*.csv
