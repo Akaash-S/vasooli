@@ -71,3 +71,15 @@ class RecoveryOutcome(Base):
     amount_recovered = Column(Numeric(12, 2), default=0)
     time_to_recovery_hours = Column(Numeric(10, 2), nullable=True)
     resolved_at = Column(DateTime(timezone=True))
+
+
+class PromiseToPay(Base):
+    __tablename__ = "promises_to_pay"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    case_id = Column(UUID(as_uuid=True), ForeignKey("risk_cases.id"), nullable=False)
+    promised_date = Column(Date, nullable=False)
+    promised_via = Column(String, nullable=False)  # 'email' | 'call' | 'portal'
+    status = Column(String, nullable=False, default="pending")  # pending | honored | broken
+    recorded_at = Column(DateTime(timezone=True), nullable=False)
+    resolved_at = Column(DateTime(timezone=True), nullable=True)
+
