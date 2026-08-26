@@ -107,6 +107,10 @@ def diagnose_llm(case, txn, client, latencies: list) -> dict:
     tool_choice forces the function call — never falls back to free-text parsing.
     If the API returns a root_cause outside the valid enum, routes to 'unclear'.
     Appends per-call latency_ms to `latencies` list (caller owns the list).
+
+    Return dict includes `llm_event_payload` — a pre-built dict the caller should
+    use to write a separate `diagnosis_llm_call` CaseEvent row alongside the normal
+    `case_diagnosed` event. This keeps model imports out of this module.
     """
     t0 = time.perf_counter()
     try:
@@ -127,15 +131,25 @@ def diagnose_llm(case, txn, client, latencies: list) -> dict:
         latencies.append(latency_ms)
 
         args = json.loads(resp.choices[0].message.tool_calls[0].function.arguments)
-        root_cause = args.get("root_cause", "unclear")
+        root_cause_returned = args.get("root_cause", "unclear")
         reasoning = args.get("reasoning", "")
 
         # Hard safety: if LLM returns a value outside the valid enum, route to unclear
+        root_cause = root_cause_returned
         if root_cause not in VALID_ROOT_CAUSES:
             logger.warning("LLM returned unexpected root_cause=%r, routing to unclear", root_cause)
             root_cause = "unclear"
 
-        return dict(root_cause=root_cause, confidence_source="llm", reasoning=reasoning)
+        return dict(
+            root_cause=root_cause,
+            confidence_source="llm",
+            reasoning=reasoning,
+            llm_event_payload={
+                "latency_ms": latency_ms,
+                "model": "openai/gpt-oss-120b",
+                "root_cause_returned": root_cause_returned,
+            },
+        )
 
     except Exception as exc:
         latency_ms = int((time.perf_counter() - t0) * 1000)

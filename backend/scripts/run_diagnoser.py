@@ -76,13 +76,13 @@ def groq_diagnose_with_retry(case, txn, latencies: list, max_retries: int = 3) -
 async def run():
     # ── Step 1: wipe downstream tables (idempotent dev re-run safety) ────────
     async with Session() as session:
-        # Only delete case_diagnosed events, not case_detected (those belong to detector)
+        # Only delete diagnoser events (case_diagnosed & diagnosis_llm_call), not case_detected
         await session.execute(
-            delete(CaseEvent).where(CaseEvent.event_type == "case_diagnosed")
+            delete(CaseEvent).where(CaseEvent.event_type.in_(["case_diagnosed", "diagnosis_llm_call"]))
         )
         await session.execute(delete(Diagnosis))
         await session.commit()
-    logger.info("Cleared existing diagnoses and case_diagnosed events")
+    logger.info("Cleared existing diagnoses, case_diagnosed, and diagnosis_llm_call events")
 
     # ── Step 2: load risk_cases joined to raw_transactions ────────────────────
     async with Session() as read_session:
@@ -106,7 +106,6 @@ async def run():
     rule_count = 0
     llm_count = 0
     root_cause_tally: dict[str, int] = {}
-    llm_event_payloads: list[dict] = []  # for case_events with latency
 
     for case, txn in cases_and_txns:
         result = groq_diagnose_with_retry(case, txn, llm_latencies) \
@@ -135,7 +134,7 @@ async def run():
             diagnosed_at=now,
         ))
 
-        # case_event payload — include latency_ms for LLM calls
+        # 1. Standard case_diagnosed event
         payload = {
             "root_cause": root_cause,
             "confidence_source": confidence_source,
@@ -151,6 +150,16 @@ async def run():
             occurred_at=now,
         ))
 
+        # 2. Dedicated diagnosis_llm_call event if an LLM call was executed
+        if "llm_event_payload" in result:
+            event_objects.append(CaseEvent(
+                id=_uuid.uuid4(),
+                case_id=case.id,
+                event_type="diagnosis_llm_call",
+                event_payload=json.dumps(result["llm_event_payload"]),
+                occurred_at=now,
+            ))
+
     # ── Step 4: write all new objects in a fresh session ─────────────────────
     async with Session() as write_session:
         for d in diagnosis_objects:
@@ -159,7 +168,7 @@ async def run():
         for e in event_objects:
             write_session.add(e)
         await write_session.commit()
-    logger.info("Wrote %d diagnoses and %d case_diagnosed events", len(diagnosis_objects), len(event_objects))
+    logger.info("Wrote %d diagnoses and %d case events (%d case_diagnosed, %d diagnosis_llm_call)", len(diagnosis_objects), len(event_objects), len(diagnosis_objects), len(llm_latencies))
 
     # ── Summary ───────────────────────────────────────────────────────────────
     avg_llm_ms = int(sum(llm_latencies) / len(llm_latencies)) if llm_latencies else 0
