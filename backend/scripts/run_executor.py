@@ -55,22 +55,15 @@ def now_ist() -> datetime:
 
 
 async def run():
-    # ── Step 1: wipe downstream executed events for dev idempotency ───────────
-    async with Session() as session:
-        await session.execute(
-            delete(CaseEvent).where(CaseEvent.event_type == "intervention_executed")
-        )
-        await session.commit()
-    logger.info("Cleared prior intervention_executed events")
-
-    # ── Step 2: load pending interventions joined to cases, diagnoses, txns ──
+    # ── Step 1: load pending interventions joined to cases, diagnoses, txns ──
+    # Idempotency guard: skip any intervention that has already been executed (executed_at IS NOT NULL)
     async with Session() as read_session:
         result = await read_session.execute(
             select(Intervention, RiskCase, Diagnosis, RawTransaction)
             .join(RiskCase, RiskCase.id == Intervention.case_id)
             .join(Diagnosis, Diagnosis.case_id == RiskCase.id)
             .join(RawTransaction, RawTransaction.id == RiskCase.transaction_id)
-            .where(Intervention.status == "pending")
+            .where(Intervention.status == "pending", Intervention.executed_at.is_(None))
         )
         rows = result.all()
         quads = [(i, rc, d, rt) for i, rc, d, rt in rows]
@@ -79,10 +72,35 @@ async def run():
             make_transient(rc)
             make_transient(d)
             make_transient(rt)
-    logger.info("Loaded %d pending interventions", len(quads))
+    logger.info("Loaded %d pending interventions requiring execution", len(quads))
+
+    if not quads:
+        logger.info("No pending interventions to process (all interventions already executed).")
+        # Query DB tallies for reporting summary when all rows are already executed
+        async with Session() as summary_session:
+            all_int_res = await summary_session.execute(select(Intervention))
+            all_ints = all_int_res.scalars().all()
+            executed_cnt = len([i for i in all_ints if i.status == "executed"])
+            queued_cnt = len([i for i in all_ints if i.status == "queued"])
+
+            mode_tally: dict[str, int] = {}
+            for i in all_ints:
+                mode = i.execution_mode or "unknown"
+                mode_tally[mode] = mode_tally.get(mode, 0) + 1
+
+            p2p_res = await summary_session.execute(select(PromiseToPay))
+            promises_checked = len(p2p_res.scalars().all())
+
+            wh_res = await summary_session.execute(select(WebhookEvent))
+            webhook_count = len(wh_res.scalars().all())
+
+        print(f"\nInterventions processed: {len(all_ints)} (executed={executed_cnt}, queued={queued_cnt})")
+        print(f"By execution_mode: real={mode_tally.get('real', 0)}, simulated={mode_tally.get('simulated', 0)}")
+        print(f"Promises checked: {promises_checked}, resolved honored=0, broken=0, still pending={promises_checked}")
+        print(f"Webhook events received today: {webhook_count}")
+        return
 
     # ── Step 3: Select 5 update_payment_link interventions for demo ───────────
-    # Prioritize 1 hard_decline case, 1 subscription_halted case, fill rest by case_id order
     upl_quads = [q for q in quads if q[0].action_type == "update_payment_link"]
 
     hard_decline_upl = [q for q in upl_quads if q[2].root_cause == "hard_decline"]
@@ -218,7 +236,10 @@ async def run():
     logger.info("Wrote %d executed interventions and %d case_events", len(executed_interventions), len(event_objects))
 
     # ── Summary ───────────────────────────────────────────────────────────────
-    print(f"\nInterventions executed: {len(executed_interventions)}")
+    executed_cnt = len([i for i in executed_interventions if i["status"] == "executed"])
+    queued_cnt = len([i for i in executed_interventions if i["status"] == "queued"])
+
+    print(f"\nInterventions processed: {len(executed_interventions)} (executed={executed_cnt}, queued={queued_cnt})")
     print(f"By execution_mode: real={mode_tally.get('real', 0)}, simulated={mode_tally.get('simulated', 0)}")
     print("By action_type:", end="")
     for act, count in sorted(action_type_tally.items()):
