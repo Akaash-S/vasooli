@@ -52,6 +52,9 @@ class Intervention(Base):
     scheduled_at = Column(DateTime(timezone=True))
     attempt_number = Column(Integer, default=1)
     status = Column(String, nullable=False, default="pending")  # pending | executed | cancelled
+    idempotency_key = Column(String, nullable=True, unique=True)
+    executed_at = Column(DateTime(timezone=True), nullable=True)
+    execution_mode = Column(String, nullable=True)  # 'real' | 'simulated'
 
 
 class CaseEvent(Base):
@@ -82,4 +85,15 @@ class PromiseToPay(Base):
     status = Column(String, nullable=False, default="pending")  # pending | honored | broken
     recorded_at = Column(DateTime(timezone=True), nullable=False)
     resolved_at = Column(DateTime(timezone=True), nullable=True)
+
+
+class WebhookEvent(Base):
+    __tablename__ = "webhook_events"
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    razorpay_event_id = Column(String, nullable=False, unique=True)  # x-razorpay-event-id header value
+    event_type = Column(String, nullable=False)
+    payload = Column(Text, nullable=False)
+    received_at = Column(DateTime(timezone=True), nullable=False)
+    processed = Column(Boolean, nullable=False, default=False)
+
 
