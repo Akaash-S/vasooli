@@ -74,6 +74,9 @@ class RecoveryOutcome(Base):
     amount_recovered = Column(Numeric(12, 2), default=0)
     time_to_recovery_hours = Column(Numeric(10, 2), nullable=True)
     resolved_at = Column(DateTime(timezone=True))
+    resolution_source = Column(String, nullable=False, default="simulated")  # 'real' | 'simulated'
+    simulated_attempts = Column(Integer, nullable=True)  # number of simulated retry rounds before terminal outcome, null for single-shot actions
+
 
 
 class PromiseToPay(Base):
