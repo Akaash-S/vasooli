@@ -7,7 +7,11 @@ app = FastAPI(title="Vasooli API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=[
+        "http://localhost:3000",
+        "https://vasooli-dashboard.vercel.app",
+        "https://vasooli-dashboard-6j1io8ovy-akaash-s-projects.vercel.app",
+    ],
     allow_methods=["GET"],
     allow_headers=["*"],
 )
