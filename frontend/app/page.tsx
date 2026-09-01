@@ -1,7 +1,7 @@
 'use client'
 import {useEffect,useMemo,useState} from 'react'
 import {Copy,RefreshCw,Search,ChevronRight,X} from 'lucide-react'
-import {api,BatchSummary,Funnel,BreakdownRow,ExceptionList,ExceptionCase,CaseList,AuditTrail,CaseSummary} from '@/lib/api'
+import {api,BatchSummary,Funnel,BreakdownRow,ExceptionList,ExceptionCase,CaseList,AuditTrail,CaseSummary} from '../lib/api'
 const money=(n:number)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:'INR',maximumFractionDigits:0}).format(n)
 const pct=(n:number)=>`${n.toFixed(1)}%`; const label=(s:string)=>s.replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase())
 function Load({rows=3}:{rows?:number}){return <div className="flex flex-col gap-3">{Array.from({length:rows},(_,i)=><div key={i} className="h-10 animate-pulse rounded-md bg-muted"/> )}</div>}
