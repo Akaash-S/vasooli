@@ -1,0 +1,28 @@
+graph TD
+    subgraph Data Layer
+        DB[(Neon Postgres)]
+    end
+
+    subgraph 5-Stage LangGraph Pipeline
+        A[1. Detect Stage] -->|Flagged Risk Cases| B[2. Diagnose Stage]
+        B -->|Rule Matching & Groq LLM| C[3. Decide & Enforce Stage]
+        
+        subgraph Compliance Engine
+            C --- SRE[StoppingRuleEngine<br/>- RBI E-Mandate 2026 ₹15k AFA<br/>- Max 3 Retries Cap<br/>- Consecutive Failure Ethical Downgrade]
+        end
+        
+        C -->|Action Selected| D[4. Execute Stage]
+        C -->|Human Review Escalation| E[Human Review Queue]
+        
+        D -->|Payment Links / Nudges| F[5. Resolve Stage]
+        E -->|Manual Context Note| F
+    end
+
+    subgraph External Integrations
+        Groq[Groq API<br/>gpt-oss-120b] -.-> B
+        RZP[Razorpay API & Webhooks] -.-> D
+        RZP -.->|payment_link.paid| F
+    end
+
+    F --> DB
+    DB --> Dashboard[Next.js 15 Ops Dashboard]
