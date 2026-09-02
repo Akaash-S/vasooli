@@ -1,0 +1,8 @@
+graph TD
+    A[1. Detect Stage] -->|Flagged Risk Cases| B[2. Diagnose Stage]
+    B -->|Rule / LLM Root Cause| C[3. Decide & Enforce Stage]
+    C -->|Stopping Rules Passed| D[4. Execute Stage]
+    C -->|Human Review Escalation| E[Human Review Queue]
+    D -->|Interventions Triggered| F[5. Resolve Stage]
+    E -->|Manual Context Note| F
+    F -->|Recovery Outcomes & Metrics| G[Vasooli Dashboard]
